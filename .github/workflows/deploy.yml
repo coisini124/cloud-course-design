@@ -1,0 +1,57 @@
+name: CI/CD Pipeline
+
+# 当有代码推送到 main 分支时自动触发
+on:
+  push:
+    branches: [ "main" ]
+
+env:
+  # 西南-贵阳一
+  REGION_ID: cn-southwest-2
+  # 组织名称
+  ORG_NAME: coisini
+  IMAGE_NAME: backend
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: 1. 拉取最新代码
+      uses: actions/checkout@v3
+
+    - name: 2. 登录华为云 SWR 镜像仓库
+      uses: docker/login-action@v2
+      with:
+        registry: swr.${{ env.REGION_ID }}.myhuaweicloud.com
+        username: ${{ env.REGION_ID }}@${{ secrets.SWR_AK }}
+        password: ${{ secrets.SWR_SK }}
+
+    - name: 3. 构建并推送后端镜像
+      run: |
+        # 使用 GitHub 每次运行的递增编号作为镜像 Tag (如 :1, :2)
+        TAG=${{ github.run_number }}
+        FULL_IMAGE=swr.${{ env.REGION_ID }}.myhuaweicloud.com/${{ env.ORG_NAME }}/${{ env.IMAGE_NAME }}:$TAG
+        
+        echo "Building image: $FULL_IMAGE"
+        # 加上 --provenance=false 防止格式报错
+        docker build --provenance=false -t $FULL_IMAGE ./backend
+        docker push $FULL_IMAGE
+
+    - name: 4. 配置 K8s kubectl 工具
+      uses: azure/setup-kubectl@v3
+
+    - name: 5. 注入 Kubeconfig 凭据
+      run: |
+        mkdir -p ~/.kube
+        echo "${{ secrets.KUBE_CONFIG }}" | base64 --decode > ~/.kube/config
+
+    - name: 6. 更新 CCE 集群 Deployment
+      run: |
+        TAG=${{ github.run_number }}
+        FULL_IMAGE=swr.${{ env.REGION_ID }}.myhuaweicloud.com/${{ env.ORG_NAME }}/${{ env.IMAGE_NAME }}:$TAG
+        
+        echo "Deploying new image to K8s..."
+        kubectl set image deployment/backend backend=$FULL_IMAGE -n default
+        
+        # 等待滚动更新完成
+        kubectl rollout status deployment/backend -n default
