@@ -1,0 +1,47 @@
+apiVersion: sparkoperator.k8s.io/v1beta2
+kind: SparkApplication
+metadata:
+  name: pyspark-analysis
+  namespace: default
+spec:
+  type: Python
+  pythonVersion: "3"
+  mode: cluster
+  # 镜像保持你刚刚成功推送的 v10 即可，不需要重新打包
+  image: swr.cn-southwest-2.myhuaweicloud.com/coisini/pyspark:v10
+  # 挂载后的文件路径
+  mainApplicationFile: local:///opt/spark/work/a3_spark.py
+  sparkVersion: "3.4.0"
+  restartPolicy:
+    type: Never
+    
+  hadoopConf:
+    "fs.s3a.endpoint": "obs.cn-southwest-2.myhuaweicloud.com"
+    "fs.s3a.connection.ssl.enabled": "true"
+    "fs.s3a.access.key": "HPUAPGQONAGMJ1RUGWZR"
+    "fs.s3a.secret.key": "VQtQHD8J5mVdQjldx8KqRb0emcKqK9vRvrQztaFg"
+
+  # 配置刚刚创建的 U盘（ConfigMap）
+  volumes:
+    - name: code-vol
+      configMap:
+        name: spark-code-a3
+        
+  driver:
+    cores: 1
+    memory: "1g"
+    serviceAccount: spark
+    # 把 U盘 插进 Driver 容器
+    volumeMounts:
+      - name: code-vol
+        mountPath: /opt/spark/work
+        
+  executor:
+    coreRequest: "100m"
+    cores: 1
+    instances: 2
+    memory: "1g"
+    # 把 U盘 插进 Executor 容器
+    volumeMounts:
+      - name: code-vol
+        mountPath: /opt/spark/work

@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: swr.cn-southwest-2.myhuaweicloud.com/coisini/redis:7-alpine
+        # 让 Redis 启动时使用我们 Secret 里的密码
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-secret
+              key: password
+        command: ["sh", "-c", "redis-server --requirepass $REDIS_PASSWORD"]
+        resources:
+          requests:
+            memory: "64Mi"
+          limits:
+            memory: "512Mi"     # 任务3要求 ≤ 512Mi
+        volumeMounts:           # 任务4：挂载 PVC
+        - name: redis-data
+          mountPath: /data
+      volumes:
+      - name: redis-data
+        persistentVolumeClaim:
+          claimName: redis-data-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-svc
+  namespace: default
+spec:
+  type: ClusterIP
+  selector:
+    app: redis
+  ports:
+  - port: 6379
+    targetPort: 6379

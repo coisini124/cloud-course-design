@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+      - name: frontend
+        # 镜像地址
+        image: swr.cn-southwest-2.myhuaweicloud.com/coisini/frontend:v1
+        ports:
+        - containerPort: 80
+        volumeMounts:           # 任务5：Volume形式挂载配置
+        - name: nginx-conf-vol
+          mountPath: /etc/nginx/conf.d
+      volumes:
+      - name: nginx-conf-vol
+        configMap:
+          name: nginx-config    # 引用 1-config.yaml 里的内容
+---
+# 前端也暴露公网IP，方便验收查看带有你学号的首页
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-svc
+  namespace: default
+  annotations:
+    kubernetes.io/elb.class: union
+spec:
+  type: LoadBalancer
+  selector:
+    app: frontend
+  ports:
+  - port: 80
+    targetPort: 80
