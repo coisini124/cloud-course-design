@@ -1,0 +1,45 @@
+apiVersion: kubeflow.org/v2beta1   # 避坑：使用 v2beta1 解决 API 报错 (问题合集 Q11)
+kind: MPIJob
+metadata:
+  name: pytorch-mnist
+  namespace: default
+spec:
+  slotsPerWorker: 1
+  runPolicy:
+    cleanPodPolicy: Running
+  mpiReplicaSpecs:
+    Launcher:
+      replicas: 1
+      template:
+        spec:
+          containers:
+          - name: launcher
+            image: swr.cn-southwest-2.myhuaweicloud.com/coisini/pytorch-mpi:v2
+            command: ["mpirun", "--allow-run-as-root", "--oversubscribe", "-n", "2", "python", "/opt/train_mnist.py"]
+            volumeMounts:
+            - name: code-vol
+              mountPath: /opt/train_mnist.py   # 改成具体文件路径
+              subPath: train_mnist.py          # 增加 subPath，指定只挂载这一个文件
+          volumes:
+          - name: code-vol
+            configMap:
+              name: pytorch-code
+    Worker:
+      replicas: 2   # 任务书要求：以 2 个 Worker Pod 训练
+      template:
+        spec:
+          containers:
+          - name: worker
+            image: swr.cn-southwest-2.myhuaweicloud.com/coisini/pytorch-mpi:v2
+            volumeMounts:
+            - name: code-vol
+              mountPath: /opt/train_mnist.py   #  同理修改 Worker
+              subPath: train_mnist.py          #  增加 subPath
+            resources:
+              requests:
+                cpu: "100m"
+                memory: "256Mi"
+          volumes:
+          - name: code-vol
+            configMap:
+              name: pytorch-code
